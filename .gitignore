@@ -1,0 +1,22 @@
+# ===== MATLAB 临时 / 备份文件 =====
+*.asv
+*.m~
+*.autosave
+*.slx.r~
+*.tmp.*
+
+# ===== 备份压缩包 =====
+*.tar.gz
+*.zip
+*_backup*
+
+# ===== 速度模型数据（体积大 / 版权，不入库；保留 models/README.md）=====
+models/*.mat
+models/*.segy
+
+# ===== 结果大文件（.mat 波场数据体积大，建议本地保留或用 Git LFS）=====
+# 图表与表格（png/pdf/csv/txt）保留入库，供论文引用与复现检查
+results_*/*.mat
+
+# ===== IDE / 工具配置 =====
+.claude/
