@@ -2,7 +2,7 @@
 
 > 优化差分系数的交错网格有限差分弹性波模拟 · Optimized Staggered-Grid Finite-Difference Elastic Wave Modeling
 
-本科毕业论文 MATLAB 项目。基于 Marmousi 弹性模型，实现交错网格有限差分弹性波正演模拟（含 PML 吸收边界），并通过模拟退火算法以最大范数频散误差为目标优化差分系数，降低数值频散。
+MATLAB 项目。基于 Marmousi 弹性模型，实现交错网格有限差分弹性波正演模拟（含 PML 吸收边界），并通过模拟退火算法以最大范数频散误差为目标优化差分系数，降低数值频散。
 
 ## 目录结构
 
