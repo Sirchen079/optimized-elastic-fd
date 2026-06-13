@@ -1,19 +1,15 @@
-function tableFiles = ewm_write_required_tables(model, cfg, standardCoeff, optimizedCoeff, optInfo, dispersion, boundaryReferenceComparison, referenceComparison)
-%EWM_WRITE_REQUIRED_TABLES 写入实验参数、参考解设置和 CFL 稳定性表格。
+function tableFiles = ewm_write_required_tables(model, cfg, standardCoeff, optimizedCoeff, optInfo, dispersion)
+%EWM_WRITE_REQUIRED_TABLES 写入实验参数表和 CFL 稳定性表格。
 
 outDir = cfg.output.dir;
 
 experimentRows = build_experiment_rows(model, cfg, standardCoeff, optimizedCoeff, optInfo, dispersion);
-referenceRows = build_reference_rows(model, cfg, boundaryReferenceComparison, referenceComparison);
-cflRows = build_cfl_rows(model, cfg, standardCoeff, optimizedCoeff, referenceComparison);
+cflRows = build_cfl_rows(model, cfg, standardCoeff, optimizedCoeff);
 
 tableFiles = struct();
 tableFiles.experimentParameters = write_table_artifacts(outDir, ...
     'experiment_parameters_table', {'参数', '取值'}, experimentRows, ...
     '完整实验参数表');
-tableFiles.referenceSettings = write_table_artifacts(outDir, ...
-    'reference_solution_settings_table', {'项目', '取值'}, referenceRows, ...
-    '参考解设置表');
 tableFiles.cflStability = write_table_artifacts(outDir, ...
     'cfl_stability_table', {'方案', '网格间距_m', '差分系数绝对值和', '稳定dt_s', '使用dt_s', '有效CFL', '裕度', '状态'}, cflRows, ...
     'CFL 稳定性表');
@@ -65,62 +61,12 @@ rows = {
     };
 end
 
-function rows = build_reference_rows(model, cfg, boundaryReferenceComparison, referenceComparison)
-rows = {
-    '对比模型网格点数_z', model.nz;
-    '对比模型网格点数_x', model.nx;
-    '对比模型间距_m', cfg.model.spacing;
-    '实验2扩大计算域参考解启用', logical_text(cfg.boundaryReference.enabled);
-    '实验2每侧扩展网格点数', cfg.boundaryReference.extraGrid;
-    '实验2参考解PML层数', cfg.sim.nPml;
-    '实验2参考解快照时刻_s', join_numbers(cfg.snapshots.exp2Times);
-    '实验2参考解网格点数_z', value_or_field(boundaryReferenceComparison, 'referenceNz', NaN);
-    '实验2参考解网格点数_x', value_or_field(boundaryReferenceComparison, 'referenceNx', NaN);
-    '实验2波场偏离定义', '相对裁剪后的扩大计算域PML参考解的相对 L2 范数（辅助诊断，非论文"误差"）';
-    '实验3细网格参考解启用', logical_text(cfg.reference.enabled);
-    '实验3参考解目标间距_m', value_or_default(cfg.reference.spacing, NaN);
-    '实验3对比模型间距_m', cfg.model.spacing;
-    '实验3参考解快照时刻_s', join_numbers(cfg.snapshots.exp3Times);
-    '实验3参考解实际间距_m', value_or_field(referenceComparison, 'referenceSpacing', NaN);
-    '实验3参考解网格点数_z', value_or_field(referenceComparison, 'referenceNz', NaN);
-    '实验3参考解网格点数_x', value_or_field(referenceComparison, 'referenceNx', NaN);
-    '实验3参考解时间步长_s', value_or_field(referenceComparison, 'referenceDt', NaN);
-    '实验3参考解时间步数', value_or_field(referenceComparison, 'referenceNt', NaN);
-    '实验3参考解PML层数', value_or_field(referenceComparison, 'referencePmlLayers', NaN);
-    '实验3参考解来源', value_or_field(referenceComparison, 'referenceSource', '未提供');
-    '实验3原始数据间距_m', value_or_field(referenceComparison, 'referenceSourceSpacing', NaN);
-    '实验3波场偏离定义', sprintf('相对%gm细网格参考解的相对 L2 范数（最小二乘幅值因子校正后），仅作辅助诊断，非论文"误差"', value_or_default(cfg.reference.spacing, NaN));
-    '高波数能量占比定义', '径向波数大于0.55倍奈奎斯特波数的谱能量占总谱能量比例';
-    '参考解空间间隔_m', value_or_default(cfg.reference.spacing, NaN);
-    '参考解时间步长_s', value_or_field(referenceComparison, 'referenceDt', NaN);
-    '参考解PML层数', value_or_field(referenceComparison, 'referencePmlLayers', NaN);
-    '参考解网格规模', ref_grid_size_text(referenceComparison);
-    '参考解是否重采样至粗网格', '是（空间上按最近邻下采样到主模型 nz × nx，时间上按最近时间步对齐）';
-    '波场偏离统计区域是否排除PML', '否（仅裁剪到原物理域 nz × nx，未额外扣除 PML 厚度）';
-    '比较分量', 'vz';
-    '高波数阈值', '0.55 × Nyquist';
-    '相对L2波场偏离是否进行最小二乘幅值校正', '是，先估计 alpha = <u, uref> / <uref, uref>，再计算 ||u - alpha uref||_2 / ||alpha uref||_2'
-    };
-end
-
-function rows = build_cfl_rows(model, cfg, standardCoeff, optimizedCoeff, referenceComparison)
+function rows = build_cfl_rows(model, cfg, standardCoeff, optimizedCoeff)
 spacingLabel = sprintf('%gm主模型', model.dx);
 rows = [
     cfl_row([spacingLabel, '_Taylor系数'], model.dx, model.dz, max(model.vp(:)), cfg.sim.cfl, cfg.sim.dt, standardCoeff);
     cfl_row([spacingLabel, '_优化系数'], model.dx, model.dz, max(model.vp(:)), cfg.sim.cfl, cfg.sim.dt, optimizedCoeff)
     ];
-
-if isstruct(referenceComparison) && isfield(referenceComparison, 'referenceDt') && ...
-        isfield(referenceComparison, 'referenceMaxVp') && isfield(referenceComparison, 'referenceSpacing')
-    refSpacing = referenceComparison.referenceSpacing;
-    refDt = referenceComparison.referenceDt;
-    refLabel = sprintf('%gm参考解_Taylor系数', refSpacing);
-    rows = [
-        rows;
-        cfl_row(refLabel, refSpacing, refSpacing, ...
-            referenceComparison.referenceMaxVp, cfg.sim.cfl, refDt, standardCoeff)
-        ];
-end
 end
 
 function row = cfl_row(name, dx, dz, maxVp, cfl, usedDt, coeff)
@@ -321,35 +267,9 @@ if isstring(value)
 end
 if strcmp(value, 'standard')
     text = '论文模式';
-elseif strcmp(value, 'highfreq')
-    text = '论文高频模式';
 elseif strcmp(value, 'preview')
     text = '快速验证模式';
 else
     text = value;
-end
-end
-
-function value = value_or_field(s, fieldName, defaultValue)
-if isstruct(s) && isfield(s, fieldName) && ~isempty(s.(fieldName))
-    value = s.(fieldName);
-else
-    value = defaultValue;
-end
-end
-
-function value = value_or_default(value, defaultValue)
-if isempty(value)
-    value = defaultValue;
-end
-end
-
-function text = ref_grid_size_text(referenceComparison)
-nz = value_or_field(referenceComparison, 'referenceNz', NaN);
-nx = value_or_field(referenceComparison, 'referenceNx', NaN);
-if isnan(nz) || isnan(nx)
-    text = 'N/A';
-else
-    text = sprintf('%d x %d', nz, nx);
 end
 end

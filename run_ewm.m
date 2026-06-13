@@ -5,7 +5,6 @@ function results = run_ewm(mode)
 %   run_ewm              % 快速验证（80 m 缓存）
 %   run_ewm('preview')     % 同上
 %   run_ewm('standard')    % 论文模式（10 m 网格，12 Hz 震源）
-%   run_ewm('highfreq') % 论文高频模式（10 m 网格，25 Hz 震源）
 
 if nargin < 1 || isempty(mode)
     mode = 'preview';
@@ -20,7 +19,7 @@ ewm_ensure_dir(cfg.output.dir);
 cfg.output.figuresDir = fullfile(cfg.output.dir, 'figures');
 ewm_ensure_dir(cfg.output.figuresDir);
 startTime = tic;
-if (cfg.reference.enabled && cfg.reference.spacing == 10) || cfg.model.spacing == 10
+if cfg.model.spacing == 10
     ewm_build_marmousi_10m_cache(cfg.model.root, false);
 end
 
@@ -122,20 +121,6 @@ ewm_plot_energy(staggeredNoAbsorbExp2, staggeredPmlStandardExp2, ...
 ewm_plot_pml_boundary_energy(staggeredNoAbsorbExp2, staggeredPmlStandardExp2, ...
     fullfile(cfg.output.figuresDir, 'exp2_pml_boundary_energy_time.png'), ...
     fullfile(cfg.output.dir, 'exp2_pml_boundary_energy_time.csv'));
-boundaryReferenceComparison = [];
-if cfg.boundaryReference.enabled
-    fprintf('实验2补充：正在计算扩大计算域参考解，用于判断边界反射抑制效果...\n');
-    [modelBoundaryRef, cropInfo, simBoundaryRef] = ewm_make_boundary_reference_case( ...
-        model, simExp2, cfg.boundaryReference.extraGrid);
-    boundaryReferenceResult = ewm_staggered_solver(modelBoundaryRef, simBoundaryRef, ...
-        standardCoeff, true, 'exp2_boundary_large_domain_reference');
-    boundaryReferenceComparison = ewm_plot_boundary_reference_error(model, ...
-        staggeredNoAbsorbExp2, staggeredPmlStandardExp2, modelBoundaryRef, ...
-        boundaryReferenceResult, cropInfo, ...
-        fullfile(cfg.output.figuresDir, 'exp2_boundary_reference_error.png'), ...
-        fullfile(cfg.output.dir, 'exp2_boundary_reference_metrics.txt'));
-end
-
 fprintf('实验3：正在对比标准系数与基于最大范数目标函数的优化系数...\n');
 simExp3 = simBase;
 simExp3.snapshotTimes = cfg.snapshots.exp3Times;
@@ -157,58 +142,8 @@ exp3ZoomInfo = ewm_plot_wavefield_zoom(model, ...
     fullfile(cfg.output.figuresDir, 'exp3_taylor_optimized_difference_zoom.png'), ...
     fullfile(cfg.output.dir, 'exp3_taylor_optimized_difference_zoom.txt'));
 
-referenceComparison = [];
-if cfg.reference.enabled && cfg.reference.spacing < cfg.model.spacing
-    fprintf('实验3补充：正在计算更细网格参考解，用于定量判断标准系数与基于最大范数目标函数的优化系数哪个更接近参考结果...\n');
-    refModelCfg = cfg.model;
-    refModelCfg.spacing = cfg.reference.spacing;
-    modelRef = ewm_load_marmousi(refModelCfg);
-    simRef = simExp3;
-    simRef.dt = ewm_stable_dt(modelRef, standardCoeff, cfg.sim.cfl);
-    totalTime = cfg.sim.dt * (cfg.sim.nt - 1);
-    simRef.nt = ceil(totalTime / simRef.dt) + 1;
-    simRef.nPml = max(simExp3.nPml, round(simExp3.nPml * model.dx / modelRef.dx));
-    simRef.outputDir = cfg.output.dir;
-    referenceResult = ewm_staggered_solver(modelRef, simRef, ...
-        standardCoeff, true, 'exp3_reference_finer_grid');
-    referenceComparison = ewm_plot_reference_error(model, ...
-        staggeredPmlStandardExp3, staggeredPmlOptimized, modelRef, referenceResult, ...
-        fullfile(cfg.output.figuresDir, 'exp3_reference_error_comparison.png'), ...
-        fullfile(cfg.output.dir, 'exp3_reference_error_metrics.txt'));
-    referenceComparison.referenceNz = modelRef.nz;
-    referenceComparison.referenceNx = modelRef.nx;
-    referenceComparison.referenceDt = simRef.dt;
-    referenceComparison.referenceNt = simRef.nt;
-    referenceComparison.referencePmlLayers = simRef.nPml;
-    referenceComparison.referenceSource = modelRef.source;
-    referenceComparison.referenceCacheSpacing = modelRef.cacheSpacing;
-    referenceComparison.referenceMaxVp = max(modelRef.vp(:));
-    if isfield(modelRef, 'sourceSpacing')
-        referenceComparison.referenceSourceSpacing = modelRef.sourceSpacing;
-    end
-    if isfield(modelRef, 'resample')
-        referenceComparison.referenceResample = modelRef.resample;
-    end
-
-    targetTimes = cfg.snapshots.exp3Times(:);
-    standardActual = round(targetTimes / simExp3.dt) * simExp3.dt;
-    optimizedActual = standardActual;
-    referenceActual = round(targetTimes / simRef.dt) * simRef.dt;
-    mismatch = max(abs([standardActual - targetTimes, referenceActual - targetTimes]), [], 2);
-
-    T = table(targetTimes, standardActual, optimizedActual, referenceActual, mismatch, ...
-        'VariableNames', {'target_time','standard_actual_time','optimized_actual_time', ...
-                          'reference_actual_time','max_abs_time_mismatch'});
-    writetable(T, fullfile(cfg.output.dir, 'exp3_snapshot_time_alignment.csv'));
-
-    if max(mismatch) > 0.5 * simExp3.dt
-        warning('ewm:SnapshotTimeMismatch', ...
-            '参考解与粗网格快照时间差较大，请检查快照索引。');
-    end
-end
-
 requiredTables = ewm_write_required_tables(model, cfg, standardCoeff, ...
-    optimizedCoeff, optInfo, dispersion, boundaryReferenceComparison, referenceComparison);
+    optimizedCoeff, optInfo, dispersion);
 
 results = struct();
 results.config = cfg;
@@ -220,10 +155,8 @@ results.dispersion = dispersion;
 results.regularNoAbsorb = ewm_light_result(regularNoAbsorb);
 results.staggeredNoAbsorb = ewm_light_result(staggeredNoAbsorbExp2);
 results.staggeredPmlStandard = ewm_light_result(staggeredPmlStandardExp2);
-results.boundaryReferenceComparison = boundaryReferenceComparison;
 results.staggeredPmlStandardCoeffExp3 = ewm_light_result(staggeredPmlStandardExp3);
 results.staggeredPmlOptimized = ewm_light_result(staggeredPmlOptimized);
-results.referenceComparison = referenceComparison;
 results.exp3WavefieldDifference = exp3WavefieldDifference;
 results.exp3ZoomInfo = exp3ZoomInfo;
 results.requiredTables = requiredTables;
@@ -242,11 +175,6 @@ fprintf(fidManifest, '运行时间\t%s\n', datestr(now, 'yyyy-mm-dd HH:MM:SS'));
 fprintf(fidManifest, '模型路径\t%s\n', cfg.model.root);
 fprintf(fidManifest, '输出路径\t%s\n', cfg.output.dir);
 fprintf(fidManifest, '主模型网格\t%d x %d\n', model.nz, model.nx);
-if isstruct(referenceComparison) && isfield(referenceComparison, 'referenceNz')
-    fprintf(fidManifest, '参考解网格\t%d x %d\n', referenceComparison.referenceNz, referenceComparison.referenceNx);
-else
-    fprintf(fidManifest, '参考解网格\tN/A\n');
-end
 fprintf(fidManifest, 'dt\t%.12g\n', cfg.sim.dt);
 fprintf(fidManifest, 'nt\t%d\n', cfg.sim.nt);
 fprintf(fidManifest, '总模拟时长\t%.6f\n', cfg.sim.totalTime);
@@ -270,11 +198,10 @@ expectedFiles = { ...
     'figures/ricker_wavelet_time_spectrum.png', ...
     'figures/experiment_parameters_table.png', ...
     'experiment_parameters_table.csv', ...
-    'figures/reference_solution_settings_table.png', ...
-    'reference_solution_settings_table.csv', ...
     'figures/cfl_stability_table.png', ...
     'cfl_stability_table.csv', ...
     'figures/dispersion_curves.png', ...
+    'figures/sa_convergence.png', ...
     'figures/exp1_regular_vs_staggered.png', ...
     'figures/exp2_noabsorb_vs_pml.png', ...
     'figures/exp2_energy_noabsorb_vs_pml.png', ...
@@ -290,20 +217,6 @@ expectedFiles = { ...
     'summary.mat', ...
     'reproducibility_manifest.txt' ...
 };
-if cfg.boundaryReference.enabled
-    expectedFiles = [expectedFiles, { ...
-        'figures/exp2_boundary_reference_error.png', ...
-        'exp2_boundary_reference_metrics.txt' ...
-    }];
-end
-if cfg.reference.enabled
-    expectedFiles = [expectedFiles, { ...
-        'figures/exp3_reference_error_comparison.png', ...
-        'exp3_reference_error_metrics.txt', ...
-        'exp3_snapshot_time_alignment.csv', ...
-        'figures/sa_convergence.png' ...
-    }];
-end
 
 missing = {};
 for i = 1:numel(expectedFiles)

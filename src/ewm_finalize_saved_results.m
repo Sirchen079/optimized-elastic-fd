@@ -10,9 +10,6 @@ addpath(fullfile(projectDir, 'src'));
 ewm_apply_chinese_style();
 
 cfg = ewm_default_config(projectDir, mode);
-if cfg.reference.enabled && cfg.reference.spacing == 10
-    ewm_build_marmousi_10m_cache(cfg.model.root, false);
-end
 ewm_ensure_dir(cfg.output.dir);
 cfg.output.figuresDir = fullfile(cfg.output.dir, 'figures');
 ewm_ensure_dir(cfg.output.figuresDir);
@@ -43,10 +40,8 @@ regularNoAbsorb = load_result(cfg.output.dir, 'exp1_regular_noabsorb.mat');
 staggeredNoAbsorbExp1 = load_result(cfg.output.dir, 'exp1_staggered_noabsorb_standard.mat');
 staggeredNoAbsorbExp2 = load_result(cfg.output.dir, 'exp2_staggered_noabsorb_standard.mat');
 staggeredPmlStandardExp2 = load_result(cfg.output.dir, 'exp2_staggered_pml_standard.mat');
-boundaryReferenceResult = load_result(cfg.output.dir, 'exp2_boundary_large_domain_reference.mat');
 staggeredPmlStandardExp3 = load_result(cfg.output.dir, 'exp3_staggered_pml_standard.mat');
 staggeredPmlOptimized = load_result(cfg.output.dir, 'exp3_staggered_pml_minimax.mat');
-referenceResult = load_result(cfg.output.dir, 'exp3_reference_finer_grid.mat');
 
 simBase = cfg.sim;
 simBase.standardCoeff = standardCoeff;
@@ -64,17 +59,6 @@ ewm_plot_pml_boundary_energy(staggeredNoAbsorbExp2, staggeredPmlStandardExp2, ..
     fullfile(cfg.output.figuresDir, 'exp2_pml_boundary_energy_time.png'), ...
     fullfile(cfg.output.dir, 'exp2_pml_boundary_energy_time.csv'));
 
-simExp2 = simBase;
-simExp2.snapshotTimes = cfg.snapshots.exp2Times;
-simExp2.nt = max(simExp2.nt, ceil(max(simExp2.snapshotTimes) / simExp2.dt) + 1);
-[modelBoundaryRef, cropInfo] = ewm_make_boundary_reference_case( ...
-    model, simExp2, cfg.boundaryReference.extraGrid);
-boundaryReferenceComparison = ewm_plot_boundary_reference_error(model, ...
-    staggeredNoAbsorbExp2, staggeredPmlStandardExp2, modelBoundaryRef, ...
-    boundaryReferenceResult, cropInfo, ...
-    fullfile(cfg.output.figuresDir, 'exp2_boundary_reference_error.png'), ...
-    fullfile(cfg.output.dir, 'exp2_boundary_reference_metrics.txt'));
-
 ewm_plot_comparison(model, staggeredPmlStandardExp3, staggeredPmlOptimized, ...
     'Taylor 系数', '基于最大范数目标函数的优化系数', fullfile(cfg.output.figuresDir, 'exp3_standard_vs_minimax.png'));
 exp3WavefieldDifference = ewm_plot_wavefield_triptych(model, ...
@@ -88,33 +72,13 @@ exp3ZoomInfo = ewm_plot_wavefield_zoom(model, ...
     fullfile(cfg.output.figuresDir, 'exp3_taylor_optimized_difference_zoom.png'), ...
     fullfile(cfg.output.dir, 'exp3_taylor_optimized_difference_zoom.txt'));
 
-modelRef = [];
-referenceComparison = [];
-if cfg.reference.enabled && cfg.reference.spacing < cfg.model.spacing
-    refModelCfg = cfg.model;
-    refModelCfg.spacing = cfg.reference.spacing;
-    modelRef = ewm_load_marmousi(refModelCfg);
-    simExp3 = simBase;
-    simExp3.snapshotTimes = cfg.snapshots.exp3Times;
-    simRef = simExp3;
-    simRef.dt = ewm_stable_dt(modelRef, standardCoeff, cfg.sim.cfl);
-    totalTime = cfg.sim.dt * (cfg.sim.nt - 1);
-    simRef.nt = ceil(totalTime / simRef.dt) + 1;
-    simRef.nPml = max(simExp3.nPml, round(simExp3.nPml * model.dx / modelRef.dx));
-    referenceComparison = ewm_plot_reference_error(model, ...
-        staggeredPmlStandardExp3, staggeredPmlOptimized, modelRef, referenceResult, ...
-        fullfile(cfg.output.figuresDir, 'exp3_reference_error_comparison.png'), ...
-        fullfile(cfg.output.dir, 'exp3_reference_error_metrics.txt'));
-    referenceComparison = enrich_reference_metrics(referenceComparison, modelRef, simRef);
-end
-
 requiredTables = ewm_write_required_tables(model, cfg, standardCoeff, ...
-    optimizedCoeff, optInfo, dispersion, boundaryReferenceComparison, referenceComparison);
+    optimizedCoeff, optInfo, dispersion);
 
 results = build_results_struct(cfg, model, standardCoeff, optimizedCoeff, optInfo, ...
     dispersion, regularNoAbsorb, staggeredNoAbsorbExp2, staggeredPmlStandardExp2, ...
-    boundaryReferenceComparison, staggeredPmlStandardExp3, staggeredPmlOptimized, ...
-    referenceComparison, exp3WavefieldDifference, exp3ZoomInfo, requiredTables);
+    staggeredPmlStandardExp3, staggeredPmlOptimized, ...
+    exp3WavefieldDifference, exp3ZoomInfo, requiredTables);
 
 summaryFile = fullfile(cfg.output.dir, 'summary.mat');
 save(summaryFile, 'results', '-v7.3');
@@ -132,25 +96,10 @@ loaded = load(filePath);
 result = loaded.result;
 end
 
-function metrics = enrich_reference_metrics(metrics, modelRef, simRef)
-metrics.referenceDt = simRef.dt;
-metrics.referenceNt = simRef.nt;
-metrics.referencePmlLayers = simRef.nPml;
-metrics.referenceSource = modelRef.source;
-metrics.referenceCacheSpacing = modelRef.cacheSpacing;
-metrics.referenceMaxVp = max(modelRef.vp(:));
-if isfield(modelRef, 'sourceSpacing')
-    metrics.referenceSourceSpacing = modelRef.sourceSpacing;
-end
-if isfield(modelRef, 'resample')
-    metrics.referenceResample = modelRef.resample;
-end
-end
-
 function results = build_results_struct(cfg, model, standardCoeff, optimizedCoeff, optInfo, ...
     dispersion, regularNoAbsorb, staggeredNoAbsorbExp2, staggeredPmlStandardExp2, ...
-    boundaryReferenceComparison, staggeredPmlStandardExp3, staggeredPmlOptimized, ...
-    referenceComparison, exp3WavefieldDifference, exp3ZoomInfo, requiredTables)
+    staggeredPmlStandardExp3, staggeredPmlOptimized, ...
+    exp3WavefieldDifference, exp3ZoomInfo, requiredTables)
 results = struct();
 results.config = cfg;
 results.model = rmfield(model, {'vp', 'vs', 'rho'});
@@ -161,10 +110,8 @@ results.dispersion = dispersion;
 results.regularNoAbsorb = ewm_light_result(regularNoAbsorb);
 results.staggeredNoAbsorb = ewm_light_result(staggeredNoAbsorbExp2);
 results.staggeredPmlStandard = ewm_light_result(staggeredPmlStandardExp2);
-results.boundaryReferenceComparison = boundaryReferenceComparison;
 results.staggeredPmlStandardCoeffExp3 = ewm_light_result(staggeredPmlStandardExp3);
 results.staggeredPmlOptimized = ewm_light_result(staggeredPmlOptimized);
-results.referenceComparison = referenceComparison;
 results.exp3WavefieldDifference = exp3WavefieldDifference;
 results.exp3ZoomInfo = exp3ZoomInfo;
 results.requiredTables = requiredTables;

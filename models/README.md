@@ -10,13 +10,12 @@
 |----------|----------|------------|
 | `preview` | 80 m | `marmousi_cache_20m.mat`（代码自动抽稀到 80 m） |
 | `standard` | 10 m | `marmousi_cache_10m.mat` |
-| `highfreq` | 10 m | `marmousi_cache_10m.mat` |
 
 ### 方式一：直接放缓存文件（推荐）
 
 将预先生成的 `.mat` 缓存文件放入本目录：
 - `marmousi_cache_20m.mat` — 基础缓存（`preview` 模式必需）
-- `marmousi_cache_10m.mat` — 细网格缓存（`standard` / `highfreq` 模式必需）
+- `marmousi_cache_10m.mat` — 细网格缓存（`standard` 模式必需）
 
 缓存文件为 MATLAB `-v7.3` 格式，需包含字段：`vp`、`vs`、`rho`（P 波速度、S 波速度、密度，单位 m/s）、`dx`、`dz`（网格间距，单位 m）。
 

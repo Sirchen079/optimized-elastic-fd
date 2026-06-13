@@ -23,7 +23,7 @@ ewm_ensure_dir(cfg.output.dir);
 cfg.output.figuresDir = fullfile(cfg.output.dir, 'figures');
 ewm_ensure_dir(cfg.output.figuresDir);
 
-if (cfg.reference.enabled && cfg.reference.spacing == 10) || cfg.model.spacing == 10
+if cfg.model.spacing == 10
     ewm_build_marmousi_10m_cache(cfg.model.root, false);
 end
 

@@ -57,22 +57,12 @@ cfg.snapshots = struct();
 cfg.snapshots.exp1Times = [1.00, 1.10, 1.20];
 cfg.snapshots.exp2Times = 1.65;
 cfg.snapshots.exp3Times = [0.65, 0.95, 1.25];
-cfg.reference = struct();
-cfg.reference.enabled = false;
-cfg.reference.spacing = [];
-cfg.boundaryReference = struct();
-cfg.boundaryReference.enabled = false;
-cfg.boundaryReference.extraGrid = 25;
 cfg.sim.energyStride = 1;
 cfg.sim.outputDir = [];
 
 switch cfg.mode
     case 'preview'
         cfg.model.spacing = 80;
-        cfg.reference.enabled = true;
-        cfg.reference.spacing = 40;
-        cfg.boundaryReference.enabled = true;
-        cfg.boundaryReference.extraGrid = 25;
         cfg.sim.nt = 360;
         cfg.sim.nPml = 12;
         cfg.sim.f0 = 4.0;
@@ -80,28 +70,13 @@ switch cfg.mode
 
     case 'standard'
         cfg.model.spacing = 10;
-        cfg.reference.enabled = false;
-        cfg.reference.spacing = [];
-        cfg.boundaryReference.enabled = true;
-        cfg.boundaryReference.extraGrid = 100;
         cfg.sim.nt = 1600;
         cfg.sim.nPml = 30;
         cfg.sim.f0 = 12.0;
         cfg.output.dir = fullfile(projectDir, 'results_standard');
 
-    case 'highfreq'
-        cfg.model.spacing = 10;
-        cfg.reference.enabled = false;
-        cfg.reference.spacing = [];
-        cfg.boundaryReference.enabled = true;
-        cfg.boundaryReference.extraGrid = 80;
-        cfg.sim.nt = 4000;
-        cfg.sim.nPml = 20;
-        cfg.sim.f0 = 25.0;
-        cfg.output.dir = fullfile(projectDir, 'results_highfreq');
-
     otherwise
-        error('未知运行模式 "%s"，请使用 "preview"、"standard" 或 "highfreq"。', cfg.mode);
+        error('未知运行模式 "%s"，请使用 "preview" 或 "standard"。', cfg.mode);
 end
 
 cfg.sim.outputDir = cfg.output.dir;

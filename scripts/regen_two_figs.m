@@ -6,9 +6,6 @@ addpath(fullfile(projectDir, 'src'));
 ewm_apply_chinese_style();
 
 cfg = ewm_default_config(projectDir, 'standard');
-if cfg.reference.enabled && cfg.reference.spacing == 10
-    ewm_build_marmousi_10m_cache(cfg.model.root, false);
-end
 ewm_ensure_dir(cfg.output.dir);
 cfg.output.figuresDir = fullfile(cfg.output.dir, 'figures');
 ewm_ensure_dir(cfg.output.figuresDir);
